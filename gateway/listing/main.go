@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 
@@ -23,8 +24,32 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log.Println("listening to port *:8080")
-	return http.ListenAndServe(":8080", mux)
+	log.Println("listening to port *:8081")
+	return http.ListenAndServe(":8081", allowCORS(mux))
+}
+
+// allowCORS allows Cross Origin Resource Sharing from any origin.
+// Don't do this without consideration in production system.
+func allowCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			if r.Method == "OPTIONS" && r.Header.Get("Access-Control-Request-Method") != "" {
+				preflightHandler(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func preflightHandler(w http.ResponseWriter, r *http.Request) {
+	headers := []string{"Content-Type", "Accept"}
+	w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ","))
+	methods := []string{"GET", "HEAD", "PUT", "POST", "DELETE"}
+	w.Header().Set("Access-Control-Allow-Methods", strings.Join(methods, ","))
+	glog.Infof("preflight request for %s", r.URL.Path)
+	return
 }
 
 func main() {

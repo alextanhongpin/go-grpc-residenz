@@ -70,6 +70,7 @@ message DeleteListingResponse {
 }
 
 // SERVICE
+
 service ListingService {
     rpc GetListing (GetListingRequest) returns (GetListingResponse) {
         option (google.api.http) = {

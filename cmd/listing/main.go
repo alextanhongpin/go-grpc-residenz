@@ -27,7 +27,24 @@ func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingReques
 
 func (s *listingserver) GetListings(ctx context.Context, msg *pb.GetListingsRequest) (*pb.GetListingsResponse, error) {
 	return &pb.GetListingsResponse{
-		Data: []*pb.Listing{},
+		Data: []*pb.Listing{
+			&pb.Listing{
+				Id:          "1",
+				CreatedAt:   1,
+				UpdatedAt:   2,
+				Name:        "john",
+				Description: "something",
+				Cost:        11.0,
+			},
+			&pb.Listing{
+				Id:          "2",
+				CreatedAt:   1,
+				UpdatedAt:   2,
+				Name:        "doe",
+				Description: "something else",
+				Cost:        11.0,
+			},
+		},
 	}, nil
 }
 
