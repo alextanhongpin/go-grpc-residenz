@@ -1,78 +1,170 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
+	"github.com/alextanhongpin/go-residenz/app/database"
 	pb "github.com/alextanhongpin/go-residenz/proto/listing"
 )
 
-type listingserver struct{}
+type listingserver struct {
+	DB *database.Database
+}
 
-func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingRequest) (*pb.GetListingResponse, error) {
-	return &pb.GetListingResponse{
-		Data: &pb.Listing{
-			Id:          "1",
-			CreatedAt:   1,
-			UpdatedAt:   2,
-			Name:        "john",
-			Description: "something",
-			Cost:        11.0,
-		},
-	}, nil
+const collection string = "listing"
+
+// ListingWithID contains the bson.ObjectId that cannot be parsed by protobuf
+type ListingWithID struct {
+	ID         bson.ObjectId `bson:"_id,omitempty" json:"-"`
+	pb.Listing `bson:",inline"`
 }
 
 func (s *listingserver) GetListings(ctx context.Context, msg *pb.GetListingsRequest) (*pb.GetListingsResponse, error) {
-	return &pb.GetListingsResponse{
-		Data: []*pb.Listing{
-			&pb.Listing{
-				Id:          "1",
-				CreatedAt:   1,
-				UpdatedAt:   2,
-				Name:        "john",
-				Description: "something",
-				Cost:        11.0,
-			},
-			&pb.Listing{
-				Id:          "2",
-				CreatedAt:   1,
-				UpdatedAt:   2,
-				Name:        "doe",
-				Description: "something else",
-				Cost:        11.0,
-			},
-		},
+	session := s.DB.Copy()
+	defer session.Close()
+	c := s.DB.Collection(session, collection)
+
+	var listings []ListingWithID
+	if err := c.Find(bson.M{}).All(&listings); err != nil {
+		return nil, err
+	}
+
+	var responses []*pb.Listing
+	for _, v := range listings {
+		log.Printf("found object %#v", v)
+		responses = append(responses, &pb.Listing{
+			Id:          v.ID.Hex(),
+			CreatedAt:   v.CreatedAt,
+			ModifiedAt:  v.ModifiedAt,
+			Title:       v.Title,
+			Cost:        v.Cost,
+			Description: v.Description,
+			CoverPhoto:  v.CoverPhoto,
+			Address:     v.Address,
+			IsPublished: v.IsPublished,
+			IsAvailable: v.IsAvailable,
+		})
+	}
+
+	return &pb.GetListingsResponse{Data: responses}, nil
+}
+
+func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingRequest) (*pb.GetListingResponse, error) {
+	session := s.DB.Copy()
+	defer session.Close()
+	c := s.DB.Collection(session, collection)
+
+	var listing ListingWithID
+	if err := c.FindId(bson.ObjectIdHex(msg.Id)).One(&listing); err != nil {
+		return nil, err
+	}
+
+	log.Printf("found listing %#v", listing)
+	data := &pb.Listing{
+		Id:          listing.ID.Hex(), // Manual conversion of objectID to string
+		CreatedAt:   listing.CreatedAt,
+		ModifiedAt:  listing.ModifiedAt,
+		Title:       listing.Title,
+		Cost:        listing.Cost,
+		Description: listing.Description,
+		CoverPhoto:  listing.CoverPhoto,
+		Address:     listing.Address,
+		IsPublished: listing.IsPublished,
+		IsAvailable: listing.IsAvailable,
+	}
+	log.Printf("found data %#v", data)
+
+	return &pb.GetListingResponse{
+		Data: data,
 	}, nil
 }
 
 func (s *listingserver) UpdateListing(ctx context.Context, msg *pb.UpdateListingRequest) (*pb.UpdateListingResponse, error) {
-	return nil, nil
+	session := s.DB.Copy()
+	defer session.Close()
+
+	c := s.DB.Collection(session, collection)
+	if err := c.UpdateId(bson.ObjectIdHex(msg.Id), &msg); err != nil {
+		return nil, err
+	}
+	return &pb.UpdateListingResponse{
+		Msg: "Successfully updated response",
+	}, nil
 }
 
 func (s *listingserver) PostListing(ctx context.Context, msg *pb.PostListingRequest) (*pb.PostListingResponse, error) {
+	session := s.DB.Copy()
+	defer session.Close()
+
+	c := s.DB.Collection(session, collection)
+	// TODO: Validate the payload
+	msg.CreatedAt = time.Now().Unix()
+	msg.ModifiedAt = time.Now().Unix()
+	err := c.Insert(msg)
+	if err != nil {
+		if mgo.IsDup(err) {
+			return nil, err
+		}
+		return nil, err
+	}
+
 	return &pb.PostListingResponse{
-		Id: "1",
+		Msg: "Successfully created listing",
 	}, nil
 }
 
 func (s *listingserver) DeleteListing(ctx context.Context, msg *pb.DeleteListingRequest) (*pb.DeleteListingResponse, error) {
-	log.Println(msg)
+	session := s.DB.Copy()
+	defer session.Close()
+
+	c := s.DB.Collection(session, collection)
+	err := c.RemoveId(bson.ObjectIdHex(msg.Id))
+	if err != nil {
+		return nil, err
+	}
 	return &pb.DeleteListingResponse{
-		Msg: "hello",
+		Msg: "Successfully deleted listing",
 	}, nil
 }
 
 func main() {
+	var (
+		mongoAddr     = flag.String("MONGO_ADDR", "127.0.0.1:27017", "The mongodb host address")
+		mongoUsername = flag.String("MONGO_USERNAME", "", "The mongodb username")
+		mongoPassword = flag.String("MONGO_PASSWORD", "", "The mongodb password")
+		mongoDatabase = flag.String("MONGO_DATABASE", "go-grpc-residenz", "The mongodb database name")
+	)
+	flag.Parse()
+
+	db, err := database.New(database.Config{
+		Addrs:    []string{*mongoAddr},
+		Username: *mongoUsername,
+		Password: *mongoPassword,
+		Database: *mongoDatabase,
+	})
+	defer db.Session.Close()
+
+	log.Println("connected to database")
+	if err != nil {
+		log.Fatalf("failed to connect to db: %v", err)
+	}
+	log.Println("connected to db")
+
 	lis, err := net.Listen("tcp", ":9090")
 	if err != nil {
 		log.Fatalf("failed to listen %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterListingServiceServer(grpcServer, &listingserver{})
+	pb.RegisterListingServiceServer(grpcServer, &listingserver{DB: db})
 	log.Println("listening to port *:9090")
 	grpcServer.Serve(lis)
 }

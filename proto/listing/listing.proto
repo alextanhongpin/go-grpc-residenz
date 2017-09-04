@@ -3,16 +3,45 @@ option go_package = "listing";
 package listing;
 
 import "google/api/annotations.proto";
+// import "google/protobuf/any.proto";
+// import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+// option (gogoproto.populate_all) = true;
 
 // MODEL 
 
+// @inject_tag: bson:"_id,omitempty"
+message Address {
+    float lat = 1;
+    float lng = 2;
+    // @inject_tag: bson:"address_1,omitempty"
+    string address_1 = 3;
+    // @inject_tag: bson:"address_2,omitempty"
+    string address_2 = 4;
+    // @inject_tag: bson:"postal_code,omitempty"
+    string postal_code = 5;
+    string country = 6;
+    string city = 7;
+    string state = 8;
+}
+
+// We need to inject the tags to ensure the naming in the database is correct
 message Listing {
-    string id = 1;
-    int64 created_at = 2;
-    int64 updated_at = 3;
-    string name = 4;
-    string description = 5;
-    float cost = 6;
+    string id = 1; // [(gogoproto.jsontag) = "MyField1", (gogoproto.moretags) = "xml:\",comment\""];
+    // @inject_tag: bson:"created_at,omitempty"
+    int64 created_at = 2; 
+    // @inject_tag: bson:"modified_at,omitempty"
+    int64 modified_at = 3;
+    string title = 4;
+    float cost = 5;
+    string description = 6;
+    // @inject_tag: bson:"cover_photo,omitempty"
+    string cover_photo = 7;
+    Address address = 8;
+    // @inject_tag: bson:"is_published,omitempty"
+    bool is_published = 9;
+    // @inject_tag: bson:"is_available,omitempty"
+    bool is_available = 10;
 }
 
 // GET
@@ -29,34 +58,50 @@ message GetListingsRequest {
 }
 
 message GetListingsResponse {
-    repeated Listing data = 8;
+    repeated Listing data = 1;
 }
 
 // POST
 
 message PostListingRequest {
-    int64 created_at = 2;
-    int64 updated_at = 3;
-    string name = 4;
-    string description = 5;
-    float cost = 6;
+    // string id = 1;
+    // @inject_tag: bson:"created_at,omitempty"
+    int64 created_at = 2; 
+    // @inject_tag: bson:"modified_at,omitempty"
+    int64 modified_at = 3;
+    string title = 4;
+    float cost = 5;
+    string description = 6;
+    // @inject_tag: bson:"cover_photo,omitempty"
+    string cover_photo = 7;
+    Address address = 8;
+    // @inject_tag: bson:"is_published,omitempty"
+    bool is_published = 9;
+    // @inject_tag: bson:"is_available,omitempty"
+    bool is_available = 10;
 }
 
 message PostListingResponse {
-    string id = 1;
+    string msg = 1;
 }
 
 // PATCH
 
 message UpdateListingRequest {
     string id = 1;
-    string name = 4;
-    string description = 5;
-    float cost = 6;
+    int64 created_at = 2; 
+    int64 modified_at = 3;
+    string title = 4;
+    float cost = 5;
+    string description = 6;
+    string cover_photo = 7;
+    Address address = 8;
+    bool is_published = 9;
+    bool is_available = 10;
 }
 
 message UpdateListingResponse {
-    string msg = 7;
+    string msg = 11;
 }
 
 // DELETE
@@ -66,7 +111,7 @@ message DeleteListingRequest {
 }
 
 message DeleteListingResponse {
-    string msg = 7;
+    string msg = 11;
 }
 
 // SERVICE
