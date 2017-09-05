@@ -44,7 +44,7 @@ message Listing {
     bool is_available = 10;
 }
 
-// GET
+// GET ONE
 
 message GetListingRequest {
     string id = 1;
@@ -54,7 +54,10 @@ message GetListingResponse {
     Listing data = 1;
 }
 
+// GET MANY
+
 message GetListingsRequest {
+
 }
 
 message GetListingsResponse {

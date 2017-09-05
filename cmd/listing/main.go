@@ -19,16 +19,17 @@ type listingserver struct {
 	DB *database.Database
 }
 
+// The database collection name
 const collection string = "listing"
 
 // ListingWithID contains the bson.ObjectId that cannot be parsed by protobuf
 type ListingWithID struct {
-	ID         bson.ObjectId `bson:"_id,omitempty" json:"-"`
-	pb.Listing `bson:",inline"`
+	ID         bson.ObjectId    `bson:"_id,omitempty" json:"-"` // Map the _id field to golang struct bson.ObjectId
+	pb.Listing `bson:",inline"` // If we did not use inline, it will be saved as a nested object in mongodb
 }
 
 func (s *listingserver) GetListings(ctx context.Context, msg *pb.GetListingsRequest) (*pb.GetListingsResponse, error) {
-	session := s.DB.Copy()
+	session := s.DB.CopySession()
 	defer session.Close()
 	c := s.DB.Collection(session, collection)
 
@@ -39,7 +40,6 @@ func (s *listingserver) GetListings(ctx context.Context, msg *pb.GetListingsRequ
 
 	var responses []*pb.Listing
 	for _, v := range listings {
-		log.Printf("found object %#v", v)
 		responses = append(responses, &pb.Listing{
 			Id:          v.ID.Hex(),
 			CreatedAt:   v.CreatedAt,
@@ -58,7 +58,7 @@ func (s *listingserver) GetListings(ctx context.Context, msg *pb.GetListingsRequ
 }
 
 func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingRequest) (*pb.GetListingResponse, error) {
-	session := s.DB.Copy()
+	session := s.DB.CopySession()
 	defer session.Close()
 	c := s.DB.Collection(session, collection)
 
@@ -67,7 +67,6 @@ func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingReques
 		return nil, err
 	}
 
-	log.Printf("found listing %#v", listing)
 	data := &pb.Listing{
 		Id:          listing.ID.Hex(), // Manual conversion of objectID to string
 		CreatedAt:   listing.CreatedAt,
@@ -80,7 +79,6 @@ func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingReques
 		IsPublished: listing.IsPublished,
 		IsAvailable: listing.IsAvailable,
 	}
-	log.Printf("found data %#v", data)
 
 	return &pb.GetListingResponse{
 		Data: data,
@@ -88,7 +86,7 @@ func (s *listingserver) GetListing(ctx context.Context, msg *pb.GetListingReques
 }
 
 func (s *listingserver) UpdateListing(ctx context.Context, msg *pb.UpdateListingRequest) (*pb.UpdateListingResponse, error) {
-	session := s.DB.Copy()
+	session := s.DB.CopySession()
 	defer session.Close()
 
 	c := s.DB.Collection(session, collection)
@@ -101,7 +99,7 @@ func (s *listingserver) UpdateListing(ctx context.Context, msg *pb.UpdateListing
 }
 
 func (s *listingserver) PostListing(ctx context.Context, msg *pb.PostListingRequest) (*pb.PostListingResponse, error) {
-	session := s.DB.Copy()
+	session := s.DB.CopySession()
 	defer session.Close()
 
 	c := s.DB.Collection(session, collection)
@@ -122,7 +120,7 @@ func (s *listingserver) PostListing(ctx context.Context, msg *pb.PostListingRequ
 }
 
 func (s *listingserver) DeleteListing(ctx context.Context, msg *pb.DeleteListingRequest) (*pb.DeleteListingResponse, error) {
-	session := s.DB.Copy()
+	session := s.DB.CopySession()
 	defer session.Close()
 
 	c := s.DB.Collection(session, collection)
@@ -137,34 +135,34 @@ func (s *listingserver) DeleteListing(ctx context.Context, msg *pb.DeleteListing
 
 func main() {
 	var (
-		mongoAddr     = flag.String("MONGO_ADDR", "127.0.0.1:27017", "The mongodb host address")
+		mongoHost     = flag.String("MONGO_HOST", "127.0.0.1:27017", "The mongodb host address")
 		mongoUsername = flag.String("MONGO_USERNAME", "", "The mongodb username")
 		mongoPassword = flag.String("MONGO_PASSWORD", "", "The mongodb password")
 		mongoDatabase = flag.String("MONGO_DATABASE", "go-grpc-residenz", "The mongodb database name")
+		port          = flag.String("PORT", ":9090", "The port the server is listening to")
 	)
 	flag.Parse()
 
 	db, err := database.New(database.Config{
-		Addrs:    []string{*mongoAddr},
+		Addrs:    []string{*mongoHost},
 		Username: *mongoUsername,
 		Password: *mongoPassword,
 		Database: *mongoDatabase,
 	})
 	defer db.Session.Close()
-
-	log.Println("connected to database")
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
 	}
-	log.Println("connected to db")
 
-	lis, err := net.Listen("tcp", ":9090")
+	log.Println("connected to database")
+
+	lis, err := net.Listen("tcp", *port)
 	if err != nil {
 		log.Fatalf("failed to listen %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterListingServiceServer(grpcServer, &listingserver{DB: db})
-	log.Println("listening to port *:9090")
+	log.Printf("listening to port *%s\n", *port)
 	grpcServer.Serve(lis)
 }

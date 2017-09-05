@@ -21,9 +21,9 @@ type Database struct {
 	Database string
 }
 
-// Copy creates a new session with the same parameters as the original session,
+// CopySession creates a new session with the same parameters as the original session,
 // but preserves the exact authentication information from the original session
-func (db *Database) Copy() *mgo.Session {
+func (db *Database) CopySession() *mgo.Session {
 	return db.Session.Copy()
 }
 
