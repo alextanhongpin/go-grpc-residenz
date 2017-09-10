@@ -10,6 +10,14 @@ import "google/api/annotations.proto";
 
 // MODEL 
 
+message Photo {
+    string id = 1;
+    string src = 2;
+    string base64 = 3;
+    string name = 4;
+    string caption = 5;
+}
+
 // @inject_tag: bson:"_id,omitempty"
 message Address {
     float lat = 1;
@@ -20,9 +28,10 @@ message Address {
     string address_2 = 4;
     // @inject_tag: bson:"postal_code,omitempty"
     string postal_code = 5;
-    string country = 6;
-    string city = 7;
-    string state = 8;
+    string city = 6;
+    string state = 7;
+    string country = 8;
+    string country_code = 9;
 }
 
 // We need to inject the tags to ensure the naming in the database is correct
@@ -82,6 +91,8 @@ message PostListingRequest {
     bool is_published = 9;
     // @inject_tag: bson:"is_available,omitempty"
     bool is_available = 10;
+    string currency = 11;
+    string user_id = 12;
 }
 
 message PostListingResponse {
@@ -120,16 +131,25 @@ message DeleteListingResponse {
 // SERVICE
 
 service ListingService {
+    rpc GetHealth (GetHealthRequest) returns (GetHealthResponse) {
+        option (google.api.http) = {
+            get: "/v1/health"
+        };
+    }
+    // Only display published listings
     rpc GetListing (GetListingRequest) returns (GetListingResponse) {
         option (google.api.http) = {
             get: "/v1/listings/{id}"
         };
     }
+    // Only display published listings
     rpc GetListings (GetListingsRequest) returns (GetListingsResponse) {
         option (google.api.http) = {
             get: "/v1/listings"
         };
     }
+    // Get drafts
+    // Get photos
     rpc PostListing (PostListingRequest) returns (PostListingResponse) {
         option (google.api.http) = {
             post: "/v1/listings",
